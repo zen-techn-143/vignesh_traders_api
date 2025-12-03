@@ -120,14 +120,12 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
             $product_discount_amt = !empty($element['discount_amt']) ? floatval($element['discount_amt']) : 0;
             $element['without_tax_amount'] = ($qty * $price) - $product_discount_amt;
             $sum_total += $element['without_tax_amount'];
-
             // Fetch unit name
             $sqlunit = "SELECT unit_name FROM unit WHERE unit_id = ? AND delete_at = 0";
             $unitData = fetchQuery($conn, $sqlunit, [$element['unit']]);
             if (!empty($unitData)) {
                 $element['unit_name'] = $unitData[0]['unit_name'];
             }
-
             // Save back updated product to original array
             $product[$i] = $element;
         }
@@ -138,7 +136,6 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
             }
         }
         $product_json = json_encode($product, JSON_UNESCAPED_UNICODE);
-
         $billDate = date('Y-m-d', strtotime($bill_date));
         $delete_at = 0;
         // Insert invoice into database
@@ -197,7 +194,6 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
 }
 // Update Sale Invoice
 else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
-
     $invoice_id = $obj['invoice_id'] ?? null;
     $party_id = $obj['party_id'] ?? null;
     $party_name = $obj['party_name'] ?? null;
@@ -221,7 +217,6 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
     $gst_amount = isset($obj['gst_amount']) && $obj['gst_amount'] !== '' ? $obj['gst_amount'] : 0;
     $remark = isset($obj['remark']) && $obj['remark'] !== '' ? $obj['remark'] : '';
     $payment_method_json = json_encode($payment_method, true);
-
     // Validate required fields
     if (!$invoice_id || !$party_id) {
         $output = ['status' => 400, 'msg' => 'Parameter Mismatch'];
