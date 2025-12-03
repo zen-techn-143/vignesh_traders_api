@@ -145,7 +145,7 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
         $sqlinvoice = "INSERT INTO invoice (company_id, party_id,party_name, party_details, bill_date, product, sub_total, discount,discount_amount,discount_type,gst_type,gst_amount, total, paid, balance, delete_at, eway_no, vechile_no, address, mobile_number, company_details, sum_total, state_of_supply, remark, payment_method)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sqlinvoice);
-        $stmt->bind_param("ssssssddssdssisssssssssss", $compID, $party_id, $party_name, $party_details_json, $billDate, $product_json, $subtotal, $discount, $discount_amount, $discount_type, $gst_type, $gst_amount, $total, $paid, $balance_amount, $delete_at, $eway_no, $vechile_no, $address, $mobile_number, $companyData, $sum_total, $state_of_supply, $remark, $payment_method_json);
+        $stmt->bind_param("ssssssddsssssisssssssssss", $compID, $party_id, $party_name, $party_details_json, $billDate, $product_json, $subtotal, $discount, $discount_amount, $discount_type, $gst_type, $gst_amount, $total, $paid, $balance_amount, $delete_at, $eway_no, $vechile_no, $address, $mobile_number, $companyData, $sum_total, $state_of_supply, $remark, $payment_method_json);
         if ($stmt->execute()) {
             $id = $conn->insert_id;
         } else {
