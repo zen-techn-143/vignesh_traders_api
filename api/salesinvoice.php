@@ -76,7 +76,7 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
     $product = $obj['product'];
     $total = $obj['total'];
     $paid = isset($obj['paid']) && $obj['paid'] !== '' ? $obj['paid'] : 0;
-    $balance_amount = isset($obj['balance_amount']) && $obj['balance_amount'] !== '' ? $obj['balance_amount'] : 0;
+    $balance = isset($obj['balance']) && $obj['balance'] !== '' ? $obj['balance'] : 0;
     $mobile_number = $obj['mobile_number'];
     $state_of_supply = $obj['state_of_supply'];
     $payment_method = $obj['payment_method'];
@@ -87,6 +87,8 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
     $gst_type = $obj['gst_type'];
     $gst_amount = isset($obj['gst_amount']) && $obj['gst_amount'] !== '' ? $obj['gst_amount'] : 0;
     $subtotal = $obj['subtotal'];
+    $round_off = $obj['round_off'];
+    $round_off_amount = $obj['round_off_amount'];
     $payment_method_json = json_encode($payment_method, true);
     try {
         // Parameter validation
@@ -142,10 +144,10 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
         $billDate = date('Y-m-d', strtotime($bill_date));
         $delete_at = 0;
         // Insert invoice into database
-        $sqlinvoice = "INSERT INTO invoice (company_id, party_id,party_name, party_details, bill_date, product, sub_total, discount,discount_amount,discount_type,gst_type,gst_amount, total, paid, balance, delete_at, eway_no, vechile_no, address, mobile_number, company_details, sum_total, state_of_supply, remark, payment_method)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sqlinvoice = "INSERT INTO invoice (company_id, party_id,party_name, party_details, bill_date, product, sub_total, discount,discount_amount,discount_type,gst_type,gst_amount, total, paid, balance,round_off,round_off_amount, delete_at, eway_no, vechile_no, address, mobile_number, company_details, sum_total, state_of_supply, remark, payment_method)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?, ?)";
         $stmt = $conn->prepare($sqlinvoice);
-        $stmt->bind_param("ssssssddssdssisssssssssss", $compID, $party_id, $party_name, $party_details_json, $billDate, $product_json, $subtotal, $discount, $discount_amount, $discount_type, $gst_type, $gst_amount, $total, $paid, $balance_amount, $delete_at, $eway_no, $vechile_no, $address, $mobile_number, $companyData, $sum_total, $state_of_supply, $remark, $payment_method_json);
+        $stmt->bind_param("ssssssddssdssissssssssssssd", $compID, $party_id, $party_name, $party_details_json, $billDate, $product_json, $subtotal, $discount, $discount_amount, $discount_type, $gst_type, $gst_amount, $total, $paid, $balance, $round_off, $round_off_amount, $delete_at, $eway_no, $vechile_no, $address, $mobile_number, $companyData, $sum_total, $state_of_supply, $remark, $payment_method_json, $round_off, $round_off_amount);
         if ($stmt->execute()) {
             $id = $conn->insert_id;
         } else {
