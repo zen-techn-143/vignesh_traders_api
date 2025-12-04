@@ -74,9 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['search_text'])) {
 // Create Unit
 else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['unit_name'])) {
     $unit_name = $obj['unit_name'];
-    $short_name = $obj['short_name'];
+     $short_name = $obj['short_name'];
 
-    if (!$unit_name || !$short_name) {
+    if (!$unit_name) {
         $output['status'] = 400;
         $output['msg'] = 'Parameter Mismatch';
     } else {
@@ -116,12 +116,12 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['unit_name'])) {
 }
 
 // Update Unit
-else if ($_SERVER['REQUEST_METHOD'] == 'UPDATE') {
+else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
     $unit_id = $obj['unit_id'];
     $unit_name = $obj['unit_name'];
     $short_name = $obj['short_name'];
 
-    if (!$unit_id || !$unit_name || !$short_name) {
+    if (!$unit_id || !$unit_name) {
         $output['status'] = 400;
         $output['msg'] = 'Parameter Mismatch';
     } else {
