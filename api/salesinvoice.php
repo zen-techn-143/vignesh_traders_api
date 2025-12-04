@@ -87,6 +87,8 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
     $gst_type = $obj['gst_type'];
     $gst_amount = isset($obj['gst_amount']) && $obj['gst_amount'] !== '' ? $obj['gst_amount'] : 0;
     $subtotal = $obj['subtotal'];
+    $round_off = isset($obj['round_off']) ? intval($obj['round_off']) : 0;
+    $round_off_amount = isset($obj['round_off_amount']) ? floatval($obj['round_off_amount']) : 0;
     $payment_method_json = json_encode($payment_method, true);
     try {
         // Parameter validation
@@ -120,14 +122,12 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
             $product_discount_amt = !empty($element['discount_amt']) ? floatval($element['discount_amt']) : 0;
             $element['without_tax_amount'] = ($qty * $price) - $product_discount_amt;
             $sum_total += $element['without_tax_amount'];
-
             // Fetch unit name
             $sqlunit = "SELECT unit_name FROM unit WHERE unit_id = ? AND delete_at = 0";
             $unitData = fetchQuery($conn, $sqlunit, [$element['unit']]);
             if (!empty($unitData)) {
                 $element['unit_name'] = $unitData[0]['unit_name'];
             }
-
             // Save back updated product to original array
             $product[$i] = $element;
         }
@@ -138,14 +138,13 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
             }
         }
         $product_json = json_encode($product, JSON_UNESCAPED_UNICODE);
-
         $billDate = date('Y-m-d', strtotime($bill_date));
         $delete_at = 0;
         // Insert invoice into database
-        $sqlinvoice = "INSERT INTO invoice (company_id, party_id,party_name, party_details, bill_date, product, sub_total, discount,discount_amount,discount_type,gst_type,gst_amount, total, paid, balance, delete_at, eway_no, vechile_no, address, mobile_number, company_details, sum_total, state_of_supply, remark, payment_method)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sqlinvoice = "INSERT INTO invoice (company_id, party_id,party_name, party_details, bill_date, product, sub_total, discount,discount_amount,discount_type,gst_type,gst_amount, total, paid, balance, delete_at, eway_no, vechile_no, address, mobile_number, company_details, sum_total, round_off, round_off_amount, state_of_supply, remark, payment_method)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sqlinvoice);
-        $stmt->bind_param("ssssssddssdssisssssssssss", $compID, $party_id, $party_name, $party_details_json, $billDate, $product_json, $subtotal, $discount, $discount_amount, $discount_type, $gst_type, $gst_amount, $total, $paid, $balance_amount, $delete_at, $eway_no, $vechile_no, $address, $mobile_number, $companyData, $sum_total, $state_of_supply, $remark, $payment_method_json);
+        $stmt->bind_param("ssssssddsssssisssssssssdsss", $compID, $party_id, $party_name, $party_details_json, $billDate, $product_json, $subtotal, $discount, $discount_amount, $discount_type, $gst_type, $gst_amount, $total, $paid, $balance_amount, $delete_at, $eway_no, $vechile_no, $address, $mobile_number, $companyData, $sum_total, $round_off, $round_off_amount, $state_of_supply, $remark, $payment_method_json);
         if ($stmt->execute()) {
             $id = $conn->insert_id;
         } else {
@@ -197,7 +196,6 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
 }
 // Update Sale Invoice
 else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
-
     $invoice_id = $obj['invoice_id'] ?? null;
     $party_id = $obj['party_id'] ?? null;
     $party_name = $obj['party_name'] ?? null;
@@ -220,8 +218,9 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
     $gst_type = $obj['gst_type'] ?? null;
     $gst_amount = isset($obj['gst_amount']) && $obj['gst_amount'] !== '' ? $obj['gst_amount'] : 0;
     $remark = isset($obj['remark']) && $obj['remark'] !== '' ? $obj['remark'] : '';
+    $round_off = isset($obj['round_off']) ? intval($obj['round_off']) : 0;
+    $round_off_amount = isset($obj['round_off_amount']) ? floatval($obj['round_off_amount']) : 0;
     $payment_method_json = json_encode($payment_method, true);
-
     // Validate required fields
     if (!$invoice_id || !$party_id) {
         $output = ['status' => 400, 'msg' => 'Parameter Mismatch'];
@@ -259,7 +258,7 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
     $billDate = date('Y-m-d', strtotime($bill_date));
     $sqlUpdateInvoice = "UPDATE invoice SET party_id = ?,party_name = ?, party_details = ?, company_details = ?,
                          bill_date = ?, product = ?, eway_no = ?, vechile_no = ?,
-                         address = ?, mobile_number = ?, total = ?, sum_total = ?,
+                         address = ?, mobile_number = ?, total = ?, sum_total = ?, round_off = ?, round_off_amount = ?,
                          paid = ?, balance = ?, payment_method = ?,state_of_supply = ?, discount = ?,discount_amount = ?, discount_type = ?,gst_type = ?,gst_amount = ?,sub_total = ?,remark = ?
                          WHERE invoice_id = ? AND company_id = ?";
     $paramsUpdate = [
@@ -275,6 +274,8 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
         $mobile_number,
         $total,
         $sum_total,
+        $round_off,
+        $round_off_amount,
         $paid,
         $balance,
         $payment_method_json,
