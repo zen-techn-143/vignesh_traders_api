@@ -256,7 +256,7 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
 
     // Bind parameters
     if ($party_id && $payinDate && $paid && $companyDataJson && $payment_method_id && $payment_method_name) {
-        $stmt->bind_param("sssssssss", $compID, $party_id, $partyDetailsJson, $payinDate, $paid, $companyDataJson, $payment_method_id, $payment_method_name);
+        $stmt->bind_param("ssssssss", $compID, $party_id, $partyDetailsJson, $payinDate, $paid, $companyDataJson, $payment_method_id, $payment_method_name);
     } else {
         $output['status'] = 400;
         $output['msg'] = "One or more variables are undefined.";
