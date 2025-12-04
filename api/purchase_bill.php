@@ -17,7 +17,8 @@ $output = array();
 $compID = $_GET['id'];
 date_default_timezone_set('Asia/Calcutta');
 
-function fetchQuery($conn, $sql, $params) {
+function fetchQuery($conn, $sql, $params)
+{
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         error_log("Prepare failed: " . $conn->error);
@@ -93,14 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['search_text'])) {
         } else {
             $output = ['status' => 400, 'msg' => 'No records found'];
         }
-
     } catch (Exception $e) {
         $output = ['status' => 500, 'msg' => 'Internal Server Error'];
     }
-
-
-}
-else if ($_SERVER['REQUEST_METHOD'] == 'PUT' && isset($obj['purchase_id'])) {
+} else if ($_SERVER['REQUEST_METHOD'] == 'PUT' && isset($obj['purchase_id'])) {
     try {
         $purchase_id = $obj['purchase_id'];
         $party_id = $obj['party_id'];
@@ -113,7 +110,7 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT' && isset($obj['purchase_id'])) {
         $total = $obj['total'];
         $paid = $obj['paid'];
         $balance = isset($obj['balance']) ? $obj['balance'] : 0;
-        
+
 
         if (!$purchase_id || !$party_id || !$bill_date || !$stock_date || !$product || !$total || !$paid || !$balance) {
             $output = ['status' => 400, 'msg' => 'Parameter Mismatch'];
@@ -159,19 +156,13 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT' && isset($obj['purchase_id'])) {
             } else {
                 $output = ['status' => 400, 'msg' => 'Failed to Update Purchase Bill'];
             }
-
         } else {
             $output = ['status' => 400, 'msg' => 'Party Details Not Found'];
         }
-
-
-
     } catch (Exception $e) {
         $output = ['status' => 500, 'msg' => 'Internal Server Error'];
-
     }
-}
-elseif ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
+} elseif ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
     try {
         $party_id = $obj['party_id'];
         $bill_no = $obj['bill_no'];
@@ -237,7 +228,6 @@ elseif ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
                     fetchQuery($conn, $stockSql, ['STACKIN', $bill_no, $item['product_id'], $item['product_name'], $quantity, $compID, 'UNIQUE_BILL_ID', $bill_date]);
                 } else {
                     $output = ['status' => 400, 'msg' => 'Product Details Not Found'];
-                  
                 }
             }
 
@@ -269,44 +259,31 @@ elseif ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
         } else {
             $output = ['status' => 400, 'msg' => 'Party Details Not Found'];
         }
-
-       
     } catch (Exception $e) {
         $output = ['status' => 500, 'msg' => 'Internal Server Error: ' . $e->getMessage()];
-       
     }
 }
 
 
 // Delete Purchase Bill (Soft delete)
-else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['delete'])) {
-    try {
-        $purchase_id = $obj['purchase_id'];
-
-        if (!$purchase_id) {
-            $output = ['status' => 400, 'msg' => 'Parameter Mismatch'];
-
-            exit();
-        }
-
+else if ($_SERVER['REQUEST_METHOD'] == 'DELETE') {
+    $purchase_id = $obj['purchase_id'];
+    if (!$purchase_id) {
+        $output['status'] = 400;
+        $output['msg'] = 'Parameter Mismatch';
+    } else {
         $sql = "UPDATE purchase SET delete_at = '1' WHERE purchase_id = ? AND company_id = ?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param('ss', $purchase_id, $compID);
-
         if ($stmt->execute()) {
-            $output = ['status' => 200, 'msg' => 'Purchase Bill Deleted Successfully'];
+            $output['status'] = 200;
+            $output['msg'] = 'purchase Deleted Successfully';
         } else {
-            $output = ['status' => 400, 'msg' => 'Failed to Delete Purchase Bill'];
+            $output['status'] = 400;
+            $output['msg'] = 'Error deleting purchase';
         }
-
-
-
-    } catch (Exception $e) {
-        $output = ['status' => 500, 'msg' => 'Internal Server Error'];
-
     }
 } else {
     $output = ['status' => 400, 'msg' => 'Parameter Mismatch'];
 }
 echo json_encode($output);
-?>
