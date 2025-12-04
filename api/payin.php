@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['search_text'])) {
 
     $sql = "SELECT payin_id, party_id, party_details, receipt_no, company_details,
                    DATE_FORMAT(receipt_date, '%Y-%m-%d') AS receipt_date, 
-                   paid, created_date
+                   paid, payment_method_id, payment_method_name, created_date
             FROM payin 
             WHERE $where";
 
@@ -154,6 +154,7 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
     $party_id = $obj['party_id'] ?? null;
     $receipt_date = $obj['receipt_date'] ?? null;
     $paid = $obj['paid'] ?? null;
+    $payment_method_id = $obj['payment_method_id'] ?? null;
 
     // Initialize output array
     $output = [
@@ -164,13 +165,35 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
 
     // Validate required parameters
     if (
-        !$party_id || !$receipt_date || !$paid
+        !$party_id || !$receipt_date || !$paid || !$payment_method_id
     ) {
         $output['status'] = 400;
         $output['msg'] = "Parameter MisMatch: Missing required fields.";
 
         exit();
     }
+
+    // Fetch payment method name
+    $sql_method = "SELECT `payment_method_name` FROM `payment_methods` WHERE `company_id` = ? AND `payment_method_id` = ? AND `delete_at` = '0'";
+    $methodResult = fetchQuery($conn, $sql_method, [$compID, $payment_method_id]);
+
+    // Check for errors in payment method fetch
+    if ($methodResult['status'] !== 200) {
+        $output['status'] = $methodResult['status'];
+        $output['msg'] = $methodResult['msg'];
+
+        exit();
+    }
+
+    // Check if payment method details are returned
+    if (empty($methodResult['data'])) {
+        $output['status'] = 404; // Use 404 for not found
+        $output['msg'] = "Payment method not found.";
+
+        exit();
+    }
+
+    $payment_method_name = $methodResult['data'][0]['payment_method_name'];
 
     // Fetch party details
     $sqlparty = "SELECT * FROM `sales_party` WHERE `party_id` = ? AND `company_id` = ?";
@@ -220,8 +243,8 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
     $payinDate = date('Y-m-d', strtotime($receipt_date));
 
     // Insert payin record
-    $sqlReceipt = "INSERT INTO payin (company_id, party_id, party_details, receipt_date, paid, company_details, delete_at) 
-                   VALUES (?, ?, ?, ?, ?, ?, '0')";
+    $sqlReceipt = "INSERT INTO payin (company_id, party_id, party_details, receipt_date, paid, company_details, payment_method_id, payment_method_name, delete_at) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, '0')";
 
     $stmt = $conn->prepare($sqlReceipt);
     if ($stmt === false) {
@@ -232,8 +255,8 @@ else if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($obj['party_id'])) {
     }
 
     // Bind parameters
-    if ($party_id && $payinDate && $paid && $companyDataJson) {
-        $stmt->bind_param("ssssss", $compID, $party_id, $partyDetailsJson, $payinDate, $paid, $companyDataJson);
+    if ($party_id && $payinDate && $paid && $companyDataJson && $payment_method_id && $payment_method_name) {
+        $stmt->bind_param("sssssssss", $compID, $party_id, $partyDetailsJson, $payinDate, $paid, $companyDataJson, $payment_method_id, $payment_method_name);
     } else {
         $output['status'] = 400;
         $output['msg'] = "One or more variables are undefined.";
@@ -325,14 +348,27 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
     $party_id = $obj['party_id'] ?? null;
     $receipt_date = $obj['receipt_date'] ?? null;
     $paid = $obj['paid'] ?? null;
+    $payment_method_id = $obj['payment_method_id'] ?? null;
 
-    if (!$payin_id || !$party_id || !$receipt_date || !$paid) {
+    if (!$payin_id || !$party_id || !$receipt_date || !$paid || !$payment_method_id) {
         $output['status'] = 400;
         $output['msg'] = "Parameter Mismatch";
         echo json_encode($output);
         exit();
     }
 
+    // Fetch payment method name
+    $sql_method = "SELECT `payment_method_name` FROM `payment_methods` WHERE `company_id` = ? AND `payment_method_id` = ? AND `delete_at` = '0'";
+    $methodResult = fetchQuery($conn, $sql_method, [$compID, $payment_method_id]);
+
+    if ($methodResult['status'] !== 200 || empty($methodResult['data'])) {
+        $output['status'] = 404;
+        $output['msg'] = "Payment method not found.";
+        echo json_encode($output);
+        exit();
+    }
+
+    $payment_method_name = $methodResult['data'][0]['payment_method_name'];
 
     $sqlparty = "SELECT * FROM `sales_party` WHERE `party_id` = ? AND `company_id` = ?";
     $partyResult = fetchQuery($conn, $sqlparty, [$party_id, $compID]);
@@ -349,7 +385,7 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
 
 
     $sql = "UPDATE payin 
-            SET party_id = ?, party_details = ?, receipt_date = ?, paid = ? 
+            SET party_id = ?, party_details = ?, receipt_date = ?, paid = ?, payment_method_id = ?, payment_method_name = ? 
             WHERE payin_id = ? AND company_id = ?";
 
     $params = [
@@ -357,6 +393,8 @@ else if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
         $partyDetailsJson,
         date('Y-m-d', strtotime($receipt_date)),
         $paid,
+        $payment_method_id,
+        $payment_method_name,
         $payin_id,
         $compID
     ];
