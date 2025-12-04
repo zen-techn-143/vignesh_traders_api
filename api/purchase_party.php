@@ -87,7 +87,7 @@ if (isset($obj->search_text)) {
             // ----------------------------------------
             // PAYOUT DATA WITH DATE FILTER
             // ----------------------------------------
-            $payout_sql = "SELECT payout_id, voucher_no,
+            $payout_sql = "SELECT payout_id, voucher_no,details,
                            DATE_FORMAT(voucher_date, '%Y-%m-%d') as voucher_date,
                            paid
                            FROM payout
@@ -109,6 +109,7 @@ if (isset($obj->search_text)) {
                     "receipt_no" => $pay["voucher_no"],
                     "amount"     => $pay["paid"],
                     "paid"       => $pay["paid"],
+                    "details"    => $pay["details"],
                     "balance"    => "0"
                 ];
             }

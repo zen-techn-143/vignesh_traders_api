@@ -86,14 +86,15 @@ if (isset($obj->search_text)) {
                     "amount"     => $inv["total"],
                     "paid"       => $inv["paid"],
                     "balance"    => $inv["balance"],
-                    "create_date" => $inv["created_date"]
+                    "create_date" => $inv["created_date"],
+
                 ];
             }
 
             // -------------------------------------------------------
             // PAYIN DATA WITH DATE FILTER
             // -------------------------------------------------------
-            $payin_sql = "SELECT payin_id, receipt_no, 
+            $payin_sql = "SELECT payin_id, receipt_no, details,
                                  DATE_FORMAT(receipt_date, '%Y-%m-%d') AS receipt_date,
                                  paid, created_date
                           FROM payin 
@@ -122,7 +123,8 @@ if (isset($obj->search_text)) {
                     "amount"     => $pay["paid"],
                     "paid"       => $pay["paid"],
                     "balance"    => "0",
-                    "create_date" => $pay["created_date"]
+                    "create_date" => $pay["created_date"],
+                    "details"    => $pay["details"],
                 ];
             }
 
