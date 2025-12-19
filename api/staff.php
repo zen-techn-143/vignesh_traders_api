@@ -31,7 +31,24 @@ $action = $obj->action; // Extract action from the request
 
 // List Staff
 if ($action === 'listStaff') {
-    $query = "SELECT * FROM staff WHERE delete_at = 0 ORDER BY create_at DESC";
+
+    $query = "
+        SELECT 
+            s.*,
+            sa.id AS advance_row_id,
+            sa.advance_id,
+            sa.amount,
+            sa.type,
+            sa.recovery_mode,
+            sa.entry_date
+        FROM staff s
+        LEFT JOIN staff_advance sa 
+            ON sa.staff_id = s.staff_id 
+            AND sa.delete_at = 0
+        WHERE s.delete_at = 0
+        ORDER BY s.create_at DESC
+    ";
+
     $result = $conn->query($query);
 
     if ($result && $result->num_rows > 0) {
@@ -46,9 +63,11 @@ if ($action === 'listStaff') {
             "body" => ["staff" => []]
         ];
     }
+
     echo json_encode($response, JSON_NUMERIC_CHECK);
     exit();
 }
+
 
 // Add Staff
 elseif ($action === 'createStaff') {

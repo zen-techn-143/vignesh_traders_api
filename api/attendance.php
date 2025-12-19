@@ -150,6 +150,115 @@ elseif ($action === 'deleteAttendance') {
 
 
 // Invalid Action
+elseif ($action === 'addAdvance') {
+
+    $staff_id      = $obj->staff_id ?? null;
+    $staff_name    = $obj->staff_name ?? null;
+    $amount        = (float) ($obj->amount ?? 0);
+    $type          = $obj->type ?? null;
+    $recovery_mode = isset($obj->recovery_mode) ? trim($obj->recovery_mode) : null;
+    $date          = $obj->date ?? date('Y-m-d');
+
+    if (!$staff_id || !$staff_name || !$amount || !$type) {
+        echo json_encode([
+            "head" => ["code" => 400, "msg" => "Missing parameters"]
+        ]);
+        exit();
+    }
+
+    if (!in_array($type, ['add', 'less'])) {
+        echo json_encode([
+            "head" => ["code" => 400, "msg" => "Invalid advance type"]
+        ]);
+        exit();
+    }
+
+    if ($type === 'less' && !in_array($recovery_mode, ['salary','direct'])) {
+    echo json_encode([
+        "head" => ["code"=>400,"msg"=>"Invalid recovery_mode value"]
+    ]);
+    exit();
+}
+
+
+    /* STEP 1: Fetch current balance */
+    $stmt = $conn->prepare("
+        SELECT id, advance_balance
+        FROM staff
+        WHERE delete_at = 0
+        ORDER BY create_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        echo json_encode([
+            "head" => ["code" => 400, "msg" => "Staff not found"]
+        ]);
+        exit();
+    }
+
+    $staff_row_id = $row['id'];
+    $current_balance   = (float) $row['advance_balance'];
+
+    /* STEP 2: Balance calculation */
+    if ($type === 'add') {
+        $new_balance = $current_balance + $amount;
+    } else {
+        if ($amount > $current_balance) {
+            echo json_encode([
+                "head" => ["code" => 400, "msg" => "Recovery exceeds balance"]
+            ]);
+            exit();
+        }
+        $new_balance = $current_balance - $amount;
+    }
+
+    /* STEP 3: Ledger insert */
+    $advance_id = uniqid('ADV');
+    $entry_date = (new DateTime($date))->format('Y-m-d');
+
+    $stmt = $conn->prepare("
+        INSERT INTO staff_advance
+        (advance_id, staff_id, staff_name, amount, type, recovery_mode, entry_date, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->bind_param(
+        "sssdssss",
+        $advance_id,
+        $staff_id,
+        $staff_name,
+        $amount,
+        $type,
+        $recovery_mode,
+        $entry_date,
+        $timestamp
+    );
+    $stmt->execute();
+    $stmt->close();
+
+    /* STEP 4: Update balance snapshot */
+    $stmt = $conn->prepare("
+        UPDATE staff
+        SET advance_balance = ?
+        WHERE id = ?
+    ");
+    $stmt->bind_param("di", $new_balance, $staff_row_id);
+    $stmt->execute();
+    $stmt->close();
+
+    echo json_encode([
+        "head" => ["code" => 200, "msg" => "Advance transaction completed"],
+        "body" => [
+            "previous_balance" => $current_balance,
+            "current_balance"  => $new_balance,
+            "recovery_mode"    => $recovery_mode
+        ]
+    ], JSON_NUMERIC_CHECK);
+    exit();
+}
 else {
     $response = [
         "head" => ["code" => 400, "msg" => "Invalid Action"]
