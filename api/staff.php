@@ -31,31 +31,40 @@ $action = $obj->action; // Extract action from the request
 
 // List Staff
 if ($action === 'listStaff') {
-
-    $query = "
-        SELECT 
-            s.*,
-            sa.id AS advance_row_id,
-            sa.advance_id,
-            sa.amount,
-            sa.type,
-            sa.recovery_mode,
-            sa.entry_date
-        FROM staff s
-        LEFT JOIN staff_advance sa 
-            ON sa.staff_id = s.staff_id 
-            AND sa.delete_at = 0
-        WHERE s.delete_at = 0
-        ORDER BY s.create_at DESC
-    ";
+    // 1. Fetch staff with their calculated current_balance
+    $query = "SELECT 
+                s.*, 
+                IFNULL(SUM(CASE WHEN sa.type = 'add' THEN sa.amount ELSE 0 END), 0) - 
+                IFNULL(SUM(CASE WHEN sa.type = 'less' THEN sa.amount ELSE 0 END), 0) AS current_balance
+              FROM staff s
+              LEFT JOIN staff_advance sa ON s.staff_id = sa.staff_id
+              WHERE s.delete_at = 0 
+              GROUP BY s.staff_id
+              ORDER BY s.create_at DESC";
 
     $result = $conn->query($query);
 
     if ($result && $result->num_rows > 0) {
-        $staff = $result->fetch_all(MYSQLI_ASSOC);
+        $staffList = [];
+        
+        while ($row = $result->fetch_assoc()) {
+            $staffId = $row['staff_id'];
+            
+            // 2. Fetch the individual advance records for this specific staff member
+            $advanceQuery = "SELECT amount, type, recovery_mode, entry_date 
+                             FROM staff_advance 
+                             WHERE staff_id = '$staffId' 
+                             ORDER BY created_at DESC";
+            
+            $advanceResult = $conn->query($advanceQuery);
+            $row['advance_history'] = $advanceResult->fetch_all(MYSQLI_ASSOC);
+            
+            $staffList[] = $row;
+        }
+
         $response = [
             "head" => ["code" => 200, "msg" => "Success"],
-            "body" => ["staff" => $staff]
+            "body" => ["staff" => $staffList]
         ];
     } else {
         $response = [
@@ -63,11 +72,9 @@ if ($action === 'listStaff') {
             "body" => ["staff" => []]
         ];
     }
-
     echo json_encode($response, JSON_NUMERIC_CHECK);
     exit();
 }
-
 
 // Add Staff
 elseif ($action === 'createStaff') {

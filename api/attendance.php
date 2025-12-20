@@ -61,33 +61,53 @@ if ($action === 'listAttendance') {
 }
 
 // Create Attendance
+// Create Attendance
 elseif ($action === 'createAttendance') {
     $data = $obj->data ?? null;
     $date = $obj->date;
     $dateObj = new DateTime($date);
-
-
     $formattedDate = $dateObj->format('Y-m-d');
+
+    // --- NEW: Check if attendance for this date already exists ---
+    $checkStmt = $conn->prepare("SELECT id FROM attendance WHERE entry_date = ? AND delete_at = 0 LIMIT 1");
+    $checkStmt->bind_param("s", $formattedDate);
+    $checkStmt->execute();
+    $checkResult = $checkStmt->get_result();
+
+    if ($checkResult->num_rows > 0) {
+        // Attendance for this date already exists
+        $response = [
+            "head" => ["code" => 400, "msg" => "Attendance for this date already exists. Please use 'Edit' to make changes."]
+        ];
+        $checkStmt->close();
+        echo json_encode($response);
+        exit();
+    }
+    $checkStmt->close();
+    // -------------------------------------------------------------
+
+    $data_json = json_encode($data, true);
+
+    // Create an individual attendance entry for each staff member
+    $stmt = $conn->prepare("INSERT INTO attendance (attendance_id, entry_date, data, create_at) VALUES (?, ?, ?, ?)");
+    $attendance_id = uniqid('ATT'); // Generate unique ID
+
+    $stmt->bind_param("ssss", $attendance_id, $formattedDate, $data_json, $timestamp);
+
+    if (!$stmt->execute()) {
+        $response = [
+            "head" => ["code" => 400, "msg" => "Failed to insert attendance: " . $stmt->error]
+        ];
+    } else {
+        $response = [
+            "head" => ["code" => 200, "msg" => "Attendance created successfully"]
+        ];
+    }
+    $stmt->close();
     
-    $data_json = json_encode($data,true);
-
-
-        // Create an individual attendance entry for each staff member
-        $stmt = $conn->prepare("INSERT INTO attendance (attendance_id, entry_date, data, create_at) VALUES (?, ?, ?, ?)");
-        $attendance_id = uniqid('ATT'); // Generate unique ID
-
-
-        $stmt->bind_param("ssss", $attendance_id, $formattedDate, $data_json, $timestamp);
-
-        if (!$stmt->execute()) {
-            $errors[] = "Failed to insert attendance for " . $stmt->error;
-        }else{
-             $response = [
-                "head" => ["code" => 200, "msg" => "Attendance created successfully"]
-            ];
-        }
-        $stmt->close();
-    
+    // Ensure response is sent if the above code didn't already exit
+    echo json_encode($response);
+    exit();
 }
 
 
