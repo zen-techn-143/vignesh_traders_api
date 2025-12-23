@@ -31,40 +31,14 @@ $action = $obj->action; // Extract action from the request
 
 // List Staff
 if ($action === 'listStaff') {
-    // 1. Fetch staff with their calculated current_balance
-    $query = "SELECT 
-                s.*, 
-                IFNULL(SUM(CASE WHEN sa.type = 'add' THEN sa.amount ELSE 0 END), 0) - 
-                IFNULL(SUM(CASE WHEN sa.type = 'less' THEN sa.amount ELSE 0 END), 0) AS current_balance
-              FROM staff s
-              LEFT JOIN staff_advance sa ON s.staff_id = sa.staff_id
-              WHERE s.delete_at = 0 
-              GROUP BY s.staff_id
-              ORDER BY s.create_at DESC";
-
+    $query = "SELECT * FROM staff WHERE delete_at = 0 ORDER BY create_at DESC";
     $result = $conn->query($query);
 
     if ($result && $result->num_rows > 0) {
-        $staffList = [];
-        
-        while ($row = $result->fetch_assoc()) {
-            $staffId = $row['staff_id'];
-            
-            // 2. Fetch the individual advance records for this specific staff member
-            $advanceQuery = "SELECT amount, type, recovery_mode, entry_date 
-                             FROM staff_advance 
-                             WHERE staff_id = '$staffId' 
-                             ORDER BY created_at DESC";
-            
-            $advanceResult = $conn->query($advanceQuery);
-            $row['advance_history'] = $advanceResult->fetch_all(MYSQLI_ASSOC);
-            
-            $staffList[] = $row;
-        }
-
+        $staff = $result->fetch_all(MYSQLI_ASSOC);
         $response = [
             "head" => ["code" => 200, "msg" => "Success"],
-            "body" => ["staff" => $staffList]
+            "body" => ["staff" => $staff]
         ];
     } else {
         $response = [
@@ -89,8 +63,15 @@ elseif ($action === 'createStaff') {
         // Prepare and execute the insert query for the staff
         $stmt = $conn->prepare("INSERT INTO staff (staff_name, mobile_number, role, place,wages_amount
 , create_at) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssss", $staff_name, $mobile_number, $role, $place,$wages_amount
-, $timestamp);
+        $stmt->bind_param(
+            "ssssss",
+            $staff_name,
+            $mobile_number,
+            $role,
+            $place,
+            $wages_amount,
+            $timestamp
+        );
 
         if ($stmt->execute()) {
             // Get the inserted staff ID
@@ -138,9 +119,9 @@ elseif ($action === 'updateStaff') {
     $wages_amount = $obj->wages_amount ?? null;
 
     // Validate Required Fields
-    if ($edit_staff_id && $staff_name ) {
+    if ($edit_staff_id && $staff_name) {
         $stmt = $conn->prepare("UPDATE staff SET staff_name = ?, mobile_number = ?, role = ?, place = ?, wages_amount = ? WHERE id = ?");
-        $stmt->bind_param("sssssi", $staff_name, $mobile_number, $role, $place,$wages_amount, $edit_staff_id);
+        $stmt->bind_param("sssssi", $staff_name, $mobile_number, $role, $place, $wages_amount, $edit_staff_id);
 
         if ($stmt->execute()) {
             $response = [
@@ -202,4 +183,3 @@ $conn->close();
 
 // Return JSON Response
 echo json_encode($response, JSON_NUMERIC_CHECK);
-?>

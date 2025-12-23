@@ -61,53 +61,32 @@ if ($action === 'listAttendance') {
 }
 
 // Create Attendance
-// Create Attendance
 elseif ($action === 'createAttendance') {
     $data = $obj->data ?? null;
     $date = $obj->date;
     $dateObj = new DateTime($date);
+
+
     $formattedDate = $dateObj->format('Y-m-d');
 
-    // --- NEW: Check if attendance for this date already exists ---
-    $checkStmt = $conn->prepare("SELECT id FROM attendance WHERE entry_date = ? AND delete_at = 0 LIMIT 1");
-    $checkStmt->bind_param("s", $formattedDate);
-    $checkStmt->execute();
-    $checkResult = $checkStmt->get_result();
-
-    if ($checkResult->num_rows > 0) {
-        // Attendance for this date already exists
-        $response = [
-            "head" => ["code" => 400, "msg" => "Attendance for this date already exists. Please use 'Edit' to make changes."]
-        ];
-        $checkStmt->close();
-        echo json_encode($response);
-        exit();
-    }
-    $checkStmt->close();
-    // -------------------------------------------------------------
-
     $data_json = json_encode($data, true);
+
 
     // Create an individual attendance entry for each staff member
     $stmt = $conn->prepare("INSERT INTO attendance (attendance_id, entry_date, data, create_at) VALUES (?, ?, ?, ?)");
     $attendance_id = uniqid('ATT'); // Generate unique ID
 
+
     $stmt->bind_param("ssss", $attendance_id, $formattedDate, $data_json, $timestamp);
 
     if (!$stmt->execute()) {
-        $response = [
-            "head" => ["code" => 400, "msg" => "Failed to insert attendance: " . $stmt->error]
-        ];
+        $errors[] = "Failed to insert attendance for " . $stmt->error;
     } else {
         $response = [
             "head" => ["code" => 200, "msg" => "Attendance created successfully"]
         ];
     }
     $stmt->close();
-    
-    // Ensure response is sent if the above code didn't already exit
-    echo json_encode($response);
-    exit();
 }
 
 
@@ -166,146 +145,119 @@ elseif ($action === 'deleteAttendance') {
         ];
     }
 }
-// Add Advance
+
+
+
+// Invalid Action
 elseif ($action === 'addAdvance') {
+
     $staff_id      = $obj->staff_id ?? null;
     $staff_name    = $obj->staff_name ?? null;
     $amount        = (float) ($obj->amount ?? 0);
-    $type          = $obj->type ?? null; 
+    $type          = $obj->type ?? null;
     $recovery_mode = isset($obj->recovery_mode) ? trim($obj->recovery_mode) : null;
-    $date          = (!empty($obj->date)) ? $obj->date : date('Y-m-d');
+    $date          = $obj->date ?? date('Y-m-d');
 
-    // Standardize date format
-    if (strpos($date, '/') !== false) {
-        $parts = explode('/', $date);
-        $year = (strlen($parts[2]) == 2) ? "20".$parts[2] : $parts[2];
-        $entry_date = $year."-".$parts[1]."-".$parts[0];
-    } else {
-        $entry_date = date('Y-m-d', strtotime($date));
-    }
-
-    /* STEP 1: Fetch current staff master balance (Initial State) */
-    $stmt = $conn->prepare("SELECT advance_balance FROM staff WHERE staff_id = ? AND delete_at = 0 LIMIT 1");
-    $stmt->bind_param("s", $staff_id);
-    $stmt->execute();
-    $staff_data = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$staff_data) {
-        echo json_encode(["head" => ["code" => 400, "msg" => "Staff not found"]]);
+    if (!$staff_id || !$staff_name || !$amount || !$type) {
+        echo json_encode([
+            "head" => ["code" => 400, "msg" => "Missing parameters"]
+        ]);
         exit();
     }
 
-    $initial_balance = (float)$staff_data['advance_balance']; 
+    if (!in_array($type, ['add', 'less'])) {
+        echo json_encode([
+            "head" => ["code" => 400, "msg" => "Invalid advance type"]
+        ]);
+        exit();
+    }
 
-    /* STEP 2: Check for existing record to calculate math correctly */
-    $checkStmt = $conn->prepare("SELECT advance_id, amount FROM staff_advance WHERE staff_id = ? AND entry_date = ? AND recovery_mode = 'salary' LIMIT 1");
-    $checkStmt->bind_param("ss", $staff_id, $entry_date);
-    $checkStmt->execute();
-    $existingRecord = $checkStmt->get_result()->fetch_assoc();
-    $checkStmt->close();
+    if ($type === 'less' && !in_array($recovery_mode, ['salary', 'direct'])) {
+        echo json_encode([
+            "head" => ["code" => 400, "msg" => "Invalid recovery_mode value"]
+        ]);
+        exit();
+    }
 
-    if ($existingRecord) {
-        /* UPDATE CASE: Revert old amount first, then apply new amount */
-        $old_amount = (float)$existingRecord['amount'];
-        $advance_id = $existingRecord['advance_id'];
 
-        // Formula: Current Balance + Old Deduction - New Deduction
-        $new_balance = $initial_balance + $old_amount - $amount;
+    /* STEP 1: Fetch current balance */
+    $stmt = $conn->prepare("
+        SELECT id, advance_balance
+        FROM staff
+        WHERE delete_at = 0
+        ORDER BY create_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-        if ($amount === 0) {
-            $stmt = $conn->prepare("DELETE FROM staff_advance WHERE advance_id = ?");
-            $stmt->bind_param("s", $advance_id);
-            $stmt->execute();
-            $stmt->close();
-        } else {
-            $stmt = $conn->prepare("UPDATE staff_advance SET amount = ? WHERE advance_id = ?");
-            $stmt->bind_param("ds", $amount, $advance_id);
-            $stmt->execute();
-            $stmt->close();
-        }
+    if (!$row) {
+        echo json_encode([
+            "head" => ["code" => 400, "msg" => "Staff not found"]
+        ]);
+        exit();
+    }
+
+    $staff_row_id = $row['id'];
+    $current_balance   = (float) $row['advance_balance'];
+
+    /* STEP 2: Balance calculation */
+    if ($type === 'add') {
+        $new_balance = $current_balance + $amount;
     } else {
-        /* INSERT CASE: Brand new entry */
-        $advance_id = uniqid('ADV');
-        
-        // Corrected variable name: use $initial_balance here
-        if ($type === 'add') {
-            $new_balance = $initial_balance + $amount;
-        } else {
-            $new_balance = $initial_balance - $amount;
+        if ($amount > $current_balance) {
+            echo json_encode([
+                "head" => ["code" => 400, "msg" => "Recovery exceeds balance"]
+            ]);
+            exit();
         }
-
-        $ins = $conn->prepare("INSERT INTO staff_advance (advance_id, staff_id, staff_name, amount, type, recovery_mode, entry_date, created_at) VALUES (?,?,?,?,?,?,?,?)");
-        $ins->bind_param("sssdssss", $advance_id, $staff_id, $staff_name, $amount, $type, $recovery_mode, $entry_date, $timestamp);
-        $ins->execute();
-        $ins->close();
+        $new_balance = $current_balance - $amount;
     }
 
-    /* STEP 3: Update Staff Master Balance */
-   /* STEP 3: Update Staff Master Balance */
-$updStaff = $conn->prepare("UPDATE staff SET advance_balance = ? WHERE staff_id = ? AND delete_at = 0");
-$updStaff->bind_param("ds", $new_balance, $staff_id);
+    /* STEP 3: Ledger insert */
+    $advance_id = uniqid('ADV');
+    $entry_date = (new DateTime($date))->format('Y-m-d');
 
-if (!$updStaff->execute()) {
-    echo json_encode([
-        "head" => ["code" => 500, "msg" => "Database error updating staff balance: " . $updStaff->error]
-    ]);
-    exit();
-}
+    $stmt = $conn->prepare("
+        INSERT INTO staff_advance
+        (advance_id, staff_id, staff_name, amount, type, recovery_mode, entry_date, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->bind_param(
+        "sssdssss",
+        $advance_id,
+        $staff_id,
+        $staff_name,
+        $amount,
+        $type,
+        $recovery_mode,
+        $entry_date,
+        $timestamp
+    );
+    $stmt->execute();
+    $stmt->close();
 
-if ($updStaff->affected_rows === 0) {
-    // This will now tell you exactly why it failed
-    echo json_encode([
-        "head" => ["code" => 400, "msg" => "Failed to update staff balance: No active staff found with ID {$staff_id}"]
-    ]);
-    exit();
-}
-
-$updStaff->close();
-
-    /* STEP 4: Update Attendance JSON Data */
-    $attStmt = $conn->prepare("SELECT id, data FROM attendance WHERE entry_date = ? AND delete_at = 0 LIMIT 1");
-    $attStmt->bind_param("s", $entry_date);
-    $attStmt->execute();
-    $attResult = $attStmt->get_result()->fetch_assoc();
-    $attStmt->close();
-
-    if ($attResult) {
-        $db_id = $attResult['id'];
-        $attendance_data = json_decode($attResult['data'], true);
-        $found = false;
-
-        foreach ($attendance_data as &$row) {
-            if (trim($row['staff_name']) === trim($staff_name)) {
-                // We store the balance AFTER the deduction as the current advance_balance
-                $row['initial_balance'] = $initial_balance; 
-                $row['advance_balance'] = $new_balance;     
-                $row['deduction_amount'] = ($type === 'less') ? $amount : 0; 
-                $found = true;
-                break;
-            }
-        }
-
-        if ($found) {
-            $new_json = json_encode($attendance_data);
-            $updAtt = $conn->prepare("UPDATE attendance SET data = ? WHERE id = ?");
-            $updAtt->bind_param("si", $new_json, $db_id);
-            $updAtt->execute();
-            $updAtt->close();
-        }
-    }
+    /* STEP 4: Update balance snapshot */
+    $stmt = $conn->prepare("
+        UPDATE staff
+        SET advance_balance = ?
+        WHERE id = ?
+    ");
+    $stmt->bind_param("di", $new_balance, $staff_row_id);
+    $stmt->execute();
+    $stmt->close();
 
     echo json_encode([
-        "head" => ["code" => 200, "msg" => "Balance updated successfully"],
+        "head" => ["code" => 200, "msg" => "Advance transaction completed"],
         "body" => [
-            "initial" => $initial_balance, 
-            "new" => $new_balance,
-            "deduction" => $amount
+            "previous_balance" => $current_balance,
+            "current_balance"  => $new_balance,
+            "recovery_mode"    => $recovery_mode
         ]
-    ]);
+    ], JSON_NUMERIC_CHECK);
     exit();
-}
-else {
+} else {
     $response = [
         "head" => ["code" => 400, "msg" => "Invalid Action"]
     ];
@@ -316,4 +268,3 @@ $conn->close();
 
 // Return JSON Response
 echo json_encode($response, JSON_NUMERIC_CHECK);
-?>
