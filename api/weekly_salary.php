@@ -30,8 +30,108 @@ if (!isset($obj->action)) {
 
 $action = $obj->action; // Extract action from the request
 
-// List Weekly Salary
-if ($action === 'listWeeklySalary') {
+// List Weekly Salary with Date Range Filter
+if ($action === 'listWeeklySalaryByRange') {
+    $from_date = isset($obj->from_date) ? trim($obj->from_date) : '';
+    $to_date = isset($obj->to_date) ? trim($obj->to_date) : '';
+    
+    // Build query based on date filters
+    if (empty($from_date) && empty($to_date)) {
+        // No filters - get all data
+        $query = "SELECT * FROM weekly_salary WHERE delete_at = 0 ORDER BY create_at DESC";
+        $result = $conn->query($query);
+        
+        if ($result && $result->num_rows > 0) {
+            $weekly_salary = [];
+            while ($row = $result->fetch_assoc()) {
+                $weekly_salary[] = [
+                    "id" => $row["id"],
+                    "weekly_salary_id" => $row["weekly_salary_id"],
+                    "from_date" => $row["from_date"],
+                    "to_date" => $row["to_date"],
+                    "salary_data" => json_decode($row["salary_data"], true),
+                    "create_at" => $row["create_at"]
+                ];
+            }
+            $response = [
+                "head" => ["code" => 200, "msg" => "Success"],
+                "body" => ["weekly_salary" => $weekly_salary]
+            ];
+        } else {
+            $response = [
+                "head" => ["code" => 200, "msg" => "No Weekly Salary Found"],
+                "body" => ["weekly_salary" => []]
+            ];
+        }
+    } else {
+        // Validate both dates are provided
+        if (empty($from_date) || empty($to_date)) {
+            $response = [
+                "head" => ["code" => 400, "msg" => "Both from_date and to_date are required for filtering"],
+                "body" => []
+            ];
+            echo json_encode($response);
+            exit();
+        }
+
+        // Validate date format (YYYY-MM-DD)
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from_date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to_date)) {
+            $response = [
+                "head" => ["code" => 400, "msg" => "Invalid date format. Use YYYY-MM-DD"],
+                "body" => []
+            ];
+            echo json_encode($response);
+            exit();
+        }
+
+        // Use prepared statement for date range filtering
+        $query = "SELECT * FROM weekly_salary WHERE delete_at = 0 AND from_date >= ? AND to_date <= ? ORDER BY create_at DESC";
+        $stmt = $conn->prepare($query);
+        
+        if (!$stmt) {
+            $response = [
+                "head" => ["code" => 500, "msg" => "Database prepare error"],
+                "body" => []
+            ];
+            echo json_encode($response);
+            exit();
+        }
+
+        $stmt->bind_param("ss", $from_date, $to_date);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        $weekly_salary = [];
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $weekly_salary[] = [
+                    "id" => $row["id"],
+                    "weekly_salary_id" => $row["weekly_salary_id"],
+                    "from_date" => $row["from_date"],
+                    "to_date" => $row["to_date"],
+                    "salary_data" => json_decode($row["salary_data"], true),
+                    "create_at" => $row["create_at"]
+                ];
+            }
+            $response = [
+                "head" => ["code" => 200, "msg" => "Success"],
+                "body" => ["weekly_salary" => $weekly_salary]
+            ];
+        } else {
+            $response = [
+                "head" => ["code" => 200, "msg" => "No weekly salary found in the selected range"],
+                "body" => ["weekly_salary" => []]
+            ];
+        }
+        $stmt->close();
+    }
+    
+    echo json_encode($response, JSON_NUMERIC_CHECK);
+    exit();
+}
+
+// List Weekly Salary (Original - kept for backward compatibility)
+elseif ($action === 'listWeeklySalary') {
     $query = "SELECT * FROM weekly_salary WHERE delete_at = 0 ORDER BY create_at DESC";
     $result = $conn->query($query);
 
@@ -57,77 +157,6 @@ if ($action === 'listWeeklySalary') {
             "body" => ["weekly_salary" => []]
         ];
     }
-    echo json_encode($response, JSON_NUMERIC_CHECK);
-    exit();
-} elseif ($action === 'listWeeklySalaryByRange') {
-    // Validate and sanitize input dates
-    $start_date = isset($obj->start_date) ? trim($obj->start_date) : '';
-    $end_date = isset($obj->end_date) ? trim($obj->end_date) : '';
-
-    if (empty($start_date) || empty($end_date)) {
-        $response = [
-            "head" => ["code" => 400, "msg" => "Start date and end date are required"],
-            "body" => []
-        ];
-        echo json_encode($response);
-        exit();
-    }
-
-    // Optional: Validate date format (YYYY-MM-DD)
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date)) {
-        $response = [
-            "head" => ["code" => 400, "msg" => "Invalid date format. Use YYYY-MM-DD"],
-            "body" => []
-        ];
-        echo json_encode($response);
-        exit();
-    }
-
-    // Prevent SQL injection using prepared statements
-    $query = "SELECT weekly_salary_id, from_date, to_date, salary_data, create_at 
-              FROM weekly_salary 
-              WHERE delete_at = 0 
-                AND from_date BETWEEN ? AND ? 
-              ORDER BY from_date DESC";
-
-    $stmt = $conn->prepare($query);
-    if (!$stmt) {
-        $response = [
-            "head" => ["code" => 500, "msg" => "Database prepare error"],
-            "body" => []
-        ];
-        echo json_encode($response);
-        exit();
-    }
-
-    $stmt->bind_param("ss", $start_date, $end_date);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    $weekly_salary = [];
-    if ($result && $result->num_rows > 0) {
-        while ($row = $result->fetch_assoc()) {
-            $weekly_salary[] = [
-                "weekly_salary_id" => $row["weekly_salary_id"],
-                "from_date"     => $row["from_date"],
-                "to_date"           => $row["to_date"],
-                "salary_data"      => json_decode($row["salary_data"], true), // Ensure valid JSON
-                "create_at"      => $row["create_at"]
-            ];
-        }
-
-        $response = [
-            "head" => ["code" => 200, "msg" => "Success"],
-            "body" => ["weekly_salary" => $weekly_salary]
-        ];
-    } else {
-        $response = [
-            "head" => ["code" => 200, "msg" => "No weekly salary found in the selected range"],
-            "body" => ["weekly_salary" => []]
-        ];
-    }
-
-    $stmt->close();
     echo json_encode($response, JSON_NUMERIC_CHECK);
     exit();
 }
