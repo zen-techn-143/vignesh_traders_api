@@ -151,8 +151,8 @@ elseif ($action === 'createWeeklySalary') {
     $formatted_to = $to_date_obj->format('Y-m-d');
     $data_json = json_encode($data, true);
 
-    // Check if exists
-    $stmtCheck = $conn->prepare("SELECT COUNT(*) as count FROM weekly_salary WHERE from_date = ? AND to_date = ? AND delete_at = 0");
+    // Check for overlapping date ranges
+    $stmtCheck = $conn->prepare("SELECT COUNT(*) as count FROM weekly_salary WHERE ? <= to_date AND ? >= from_date AND delete_at = 0");
     $stmtCheck->bind_param("ss", $formatted_from, $formatted_to);
     $stmtCheck->execute();
     $resultCheck = $stmtCheck->get_result();
@@ -161,7 +161,7 @@ elseif ($action === 'createWeeklySalary') {
 
     if ($rowCheck['count'] > 0) {
         echo json_encode([
-            "head" => ["code" => 400, "msg" => "Weekly salary already exists for this date range"]
+            "head" => ["code" => 400, "msg" => "Weekly salary already exists for overlapping date range"]
         ], JSON_NUMERIC_CHECK);
         exit();
     }
